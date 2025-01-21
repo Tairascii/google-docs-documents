@@ -4,7 +4,10 @@ import (
 	"context"
 	"github.com/Tairascii/google-docs-documents/internal/app"
 	"github.com/Tairascii/google-docs-documents/internal/app/handler"
+	"github.com/Tairascii/google-docs-documents/internal/app/service/document"
+	docRepo "github.com/Tairascii/google-docs-documents/internal/app/service/document/repo"
 	"github.com/Tairascii/google-docs-documents/internal/app/usecase"
+	"github.com/dancannon/gorethink"
 	"log"
 	"net/http"
 	"os"
@@ -14,7 +17,17 @@ import (
 )
 
 func main() {
-	documents := usecase.NewDocumentsUseCase()
+	session, err := gorethink.Connect(gorethink.ConnectOpts{
+		Address: "localhost:28015", // TODO change to .env
+	})
+	if err != nil {
+		log.Fatal("Something went wrong connecting to rethink")
+	}
+
+	documentRepo := docRepo.NewRepo(session)
+	documentService := document.New(documentRepo)
+	documents := usecase.NewDocumentsUseCase(documentService)
+
 	useCases := app.UseCase{
 		Documents: documents,
 	}
