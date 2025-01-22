@@ -4,6 +4,7 @@ import "github.com/Tairascii/google-docs-documents/internal/app/service/document
 
 type DocumentsUseCase interface {
 	CreateDocument() error
+	GetDocuments() ([]document.Document, error)
 }
 
 type UseCase struct {
@@ -18,4 +19,8 @@ func NewDocumentsUseCase(documentsService document.DocumentsService) DocumentsUs
 
 func (u *UseCase) CreateDocument() error {
 	return u.documentsService.CreateDocument()
+}
+
+func (u *UseCase) GetDocuments() ([]document.Document, error) {
+	return u.documentsService.GetDocuments()
 }

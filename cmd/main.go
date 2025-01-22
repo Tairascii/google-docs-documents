@@ -24,7 +24,10 @@ func main() {
 		log.Fatal("Something went wrong connecting to rethink")
 	}
 
-	documentRepo := docRepo.NewRepo(session)
+	documentRepo := docRepo.NewRepo(docRepo.Params{
+		Session:        session,
+		DocumentsTable: "documents",
+	})
 	documentService := document.New(documentRepo)
 	documents := usecase.NewDocumentsUseCase(documentService)
 
@@ -36,7 +39,7 @@ func main() {
 	handlers := handler.NewHandler(di)
 
 	srv := &http.Server{
-		Addr:         ":8080", // TODO add .env
+		Addr:         ":8000", // TODO add .env
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  15 * time.Second,
