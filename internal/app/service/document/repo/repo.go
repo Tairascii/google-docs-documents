@@ -1,13 +1,23 @@
 package repo
 
 import (
+	"context"
+	"errors"
 	"github.com/dancannon/gorethink"
 	"log"
 )
 
+var (
+	ErrCreateDocument = errors.New("error creating document")
+)
+
+const (
+	ownerIdField = "owner_id"
+)
+
 type DocumentsRepo interface {
-	CreateDocument() error
-	GetDocuments() ([]Document, error)
+	CreateDocument(ctx context.Context, title, initialContent, ownerId string) (string, error)
+	GetDocuments(ctx context.Context, ownerId string) ([]Document, error)
 }
 
 type Repo struct {
@@ -27,12 +37,27 @@ func NewRepo(params Params) *Repo {
 	}
 }
 
-func (r *Repo) CreateDocument() error {
-	return nil
+func (r *Repo) CreateDocument(ctx context.Context, title, initialContent, ownerId string) (string, error) {
+	doc := Document{
+		Title:          title,
+		OwnerId:        ownerId,
+		InitialContent: initialContent,
+	}
+	res, err := gorethink.Table(r.documentsTable).Insert(doc).RunWrite(r.session, gorethink.RunOpts{Context: ctx})
+	if err != nil {
+		return "", errors.Join(ErrCreateDocument, err)
+	}
+
+	if len(res.GeneratedKeys) != 1 {
+		return "", ErrCreateDocument
+	}
+
+	return res.GeneratedKeys[0], nil
 }
 
-func (r *Repo) GetDocuments() ([]Document, error) {
-	cursor, err := gorethink.Table(r.documentsTable).Run(r.session)
+func (r *Repo) GetDocuments(ctx context.Context, ownerId string) ([]Document, error) {
+	filterByOwner := gorethink.Row.Field(ownerIdField).Eq(ownerId)
+	cursor, err := gorethink.Table(r.documentsTable).Filter(filterByOwner).Run(r.session, gorethink.RunOpts{Context: ctx})
 	if err != nil {
 		log.Fatalf("Error querying table: %v", err)
 	}

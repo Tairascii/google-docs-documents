@@ -1,11 +1,21 @@
 package handler
 
 import (
+	"encoding/json"
+	"errors"
 	"github.com/Tairascii/google-docs-documents/internal/app"
-	"github.com/Tairascii/google-docs-documents/internal/app/service/document"
 	"github.com/Tairascii/google-docs-documents/pkg"
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"net/http"
+)
+
+// TODO move to apigw and use vault
+const (
+	accessSecret = "yoS0baK1Ya"
+)
+
+var (
+	ErrAuth = errors.New("authentication failed")
 )
 
 type Handler struct {
@@ -18,6 +28,7 @@ func NewHandler(di *app.DI) *Handler {
 
 func (h *Handler) InitHandlers() *chi.Mux {
 	r := chi.NewRouter()
+	r.Use(ParseToken(accessSecret))
 	r.Route("/api", func(api chi.Router) {
 		api.Route("/v1", func(v1 chi.Router) {
 			v1.Mount("/documents", handlers(h))
@@ -39,17 +50,30 @@ func handlers(h *Handler) http.Handler {
 }
 
 func (h *Handler) GetDocuments(w http.ResponseWriter, r *http.Request) {
-	res, err := h.DI.UseCase.Documents.GetDocuments()
+	ctx := r.Context()
+	res, err := h.DI.UseCase.Documents.GetDocuments(ctx)
 	if err != nil {
 		pkg.JSONErrorResponseWriter(w, err, http.StatusInternalServerError)
 		return
 	}
-	pkg.JSONResponseWriter[[]document.Document](w, res, http.StatusOK)
+	pkg.JSONResponseWriter[[]Document](w, toDocuments(res), http.StatusOK)
 }
 
 func (h *Handler) CreateDocument(w http.ResponseWriter, r *http.Request) {
-	err := h.DI.UseCase.Documents.CreateDocument()
-	if err != nil {
+	var payload CreateDocumentPayload
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&payload); err != nil {
+		pkg.JSONErrorResponseWriter(w, err, http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
+
+	ctx := r.Context()
+	id, err := h.DI.UseCase.Documents.CreateDocument(ctx, payload.Title, payload.InitialContent)
+	if err != nil {
+		pkg.JSONErrorResponseWriter(w, err, http.StatusBadRequest)
+		return
+	}
+
+	pkg.JSONResponseWriter[CreateDocumentResponse](w, CreateDocumentResponse{DocumentID: id}, http.StatusOK)
 }
