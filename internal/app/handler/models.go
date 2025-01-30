@@ -12,7 +12,7 @@ type CreateDocumentResponse struct {
 type Document struct {
 	Id             string `json:"id"`
 	Title          string `json:"title"`
-	OwnerId        string `json:"owner_id"`
+	OwnerId        string `json:"ownerId"`
 	InitialContent string `json:"initialContent"`
 	RoomId         string `json:"roomId"`
 	OrgId          string `json:"orgId"`
