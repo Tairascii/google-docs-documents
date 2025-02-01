@@ -9,15 +9,19 @@ import (
 
 var (
 	ErrCreateDocument = errors.New("error creating document")
+	ErrNoData         = errors.New("no data")
 )
 
 const (
-	ownerIdField = "owner_id"
+	ownerIdField    = "owner_id"
+	documentIdField = "document_id"
 )
 
 type DocumentsRepo interface {
 	CreateDocument(ctx context.Context, title, initialContent, ownerId string) (string, error)
 	GetDocuments(ctx context.Context, ownerId string) ([]Document, error)
+	GetDocumentById(ctx context.Context, documentId string) (Document, error)
+	DeleteDocument(ctx context.Context, documentId string) error
 }
 
 type Repo struct {
@@ -74,4 +78,19 @@ func (r *Repo) GetDocuments(ctx context.Context, ownerId string) ([]Document, er
 		return nil, err
 	}
 	return result, nil
+}
+
+func (r *Repo) GetDocumentById(ctx context.Context, documentId string) (Document, error) {
+	var doc Document
+	err := gorethink.Table(r.documentsTable).Get(documentId).ReadOne(&doc, r.session, gorethink.RunOpts{Context: ctx})
+	if err != nil {
+		return Document{}, err
+	}
+
+	return doc, nil
+}
+
+func (r *Repo) DeleteDocument(ctx context.Context, documentId string) error {
+	doc := gorethink.Table(r.documentsTable).Get(documentId)
+	return doc.Delete().Exec(r.session, gorethink.ExecOpts{Context: ctx, NoReply: true})
 }

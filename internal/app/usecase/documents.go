@@ -8,6 +8,7 @@ import (
 type DocumentsUseCase interface {
 	CreateDocument(ctx context.Context, title, initialContent string) (string, error)
 	GetDocuments(ctx context.Context) ([]document.Document, error)
+	DeleteDocument(ctx context.Context, id string) error
 }
 
 type UseCase struct {
@@ -29,4 +30,14 @@ func (u *UseCase) CreateDocument(ctx context.Context, title, initialContent stri
 
 func (u *UseCase) GetDocuments(ctx context.Context) ([]document.Document, error) {
 	return u.documentsService.GetDocuments(ctx)
+}
+
+func (u *UseCase) DeleteDocument(ctx context.Context, id string) error {
+	_, err := u.documentsService.GetDocumentById(ctx, id)
+
+	if err != nil {
+		return err
+	}
+
+	return u.documentsService.DeleteDocument(ctx, id)
 }

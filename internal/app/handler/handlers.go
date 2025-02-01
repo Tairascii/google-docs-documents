@@ -3,11 +3,16 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/Tairascii/google-docs-documents/internal/app"
+	"github.com/Tairascii/google-docs-documents/internal/app/service/document"
 	"github.com/Tairascii/google-docs-documents/pkg"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
+	"github.com/gorilla/websocket"
+	"log"
 	"net/http"
+	"sync"
 )
 
 // TODO move to apigw and use vault
@@ -16,15 +21,33 @@ const (
 )
 
 var (
-	ErrAuth = errors.New("authentication failed")
+	ErrAuth           = errors.New("authentication failed")
+	ErrInvalidRequest = errors.New("invalid request")
+	ErrNotAllowed     = errors.New("not allowed")
 )
 
 type Handler struct {
-	DI *app.DI
+	DI       *app.DI
+	upgrader websocket.Upgrader
+	clients  map[*websocket.Conn]bool
+	mu       *sync.Mutex
 }
 
 func NewHandler(di *app.DI) *Handler {
-	return &Handler{DI: di}
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}
+	var clients = make(map[*websocket.Conn]bool)
+	return &Handler{
+		DI:       di,
+		upgrader: upgrader,
+		clients:  clients,
+		mu:       &sync.Mutex{},
+	}
 }
 
 func (h *Handler) InitHandlers() *chi.Mux {
@@ -34,10 +57,10 @@ func (h *Handler) InitHandlers() *chi.Mux {
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 	}))
-	r.Use(ParseToken(accessSecret))
 	r.Route("/api", func(api chi.Router) {
 		api.Route("/v1", func(v1 chi.Router) {
 			v1.Mount("/documents", handlers(h))
+			v1.HandleFunc("/document/ws", h.ConnectWS)
 		})
 	})
 	return r
@@ -45,13 +68,12 @@ func (h *Handler) InitHandlers() *chi.Mux {
 
 func handlers(h *Handler) http.Handler {
 	rg := chi.NewRouter()
+	rg.Use(ParseToken(accessSecret))
 	rg.Group(func(r chi.Router) {
 		r.Get("/", h.GetDocuments)
+		r.Post("/", h.CreateDocument)
+		r.Delete("/{id}", h.DeleteDocument)
 	})
-	rg.Group(func(r chi.Router) {
-		r.Post("/create", h.CreateDocument)
-	})
-
 	return rg
 }
 
@@ -82,4 +104,59 @@ func (h *Handler) CreateDocument(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pkg.JSONResponseWriter[CreateDocumentResponse](w, CreateDocumentResponse{DocumentID: id}, http.StatusOK)
+}
+
+func (h *Handler) DeleteDocument(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		pkg.JSONErrorResponseWriter(w, ErrInvalidRequest, http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	err := h.DI.UseCase.Documents.DeleteDocument(ctx, id)
+	if err != nil {
+		if errors.Is(err, document.ErrNotAllowed) {
+			pkg.JSONErrorResponseWriter(w, ErrNotAllowed, http.StatusForbidden)
+			return
+		}
+		pkg.JSONErrorResponseWriter(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	pkg.JSONResponseWriter[any](w, nil, http.StatusNoContent)
+}
+
+func (h *Handler) ConnectWS(w http.ResponseWriter, r *http.Request) {
+	conn, err := h.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		pkg.JSONErrorResponseWriter(w, err, http.StatusInternalServerError)
+		return
+	}
+	defer conn.Close()
+
+	h.mu.Lock()
+	h.clients[conn] = true
+	h.mu.Unlock()
+	defer func() {
+		h.mu.Lock()
+		delete(h.clients, conn)
+		h.mu.Unlock()
+	}()
+
+	fmt.Println("connected to client")
+
+	for {
+		messageType, msg, err := conn.ReadMessage()
+		if err != nil {
+			log.Println("Read Error:", err)
+			break
+		}
+		log.Printf("Received: %s\n", msg)
+
+		if err := conn.WriteMessage(messageType, msg); err != nil {
+			log.Println("Write Error:", err)
+			break
+		}
+	}
 }
