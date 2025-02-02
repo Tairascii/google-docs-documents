@@ -73,6 +73,7 @@ func handlers(h *Handler) http.Handler {
 		r.Get("/", h.GetDocuments)
 		r.Post("/", h.CreateDocument)
 		r.Delete("/{id}", h.DeleteDocument)
+		r.Put("/{id}", h.EditDocument)
 	})
 	return rg
 }
@@ -115,6 +116,40 @@ func (h *Handler) DeleteDocument(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	err := h.DI.UseCase.Documents.DeleteDocument(ctx, id)
+	if err != nil {
+		if errors.Is(err, document.ErrNotAllowed) {
+			pkg.JSONErrorResponseWriter(w, ErrNotAllowed, http.StatusForbidden)
+			return
+		}
+		pkg.JSONErrorResponseWriter(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	pkg.JSONResponseWriter[any](w, nil, http.StatusNoContent)
+}
+
+func (h *Handler) EditDocument(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		pkg.JSONErrorResponseWriter(w, ErrInvalidRequest, http.StatusBadRequest)
+		return
+	}
+
+	var payload EditDocumentPayload
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&payload); err != nil {
+		pkg.JSONErrorResponseWriter(w, err, http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	if payload.Title == "" {
+		pkg.JSONErrorResponseWriter(w, ErrInvalidRequest, http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	err := h.DI.UseCase.Documents.EditDocument(ctx, id, payload.Title)
 	if err != nil {
 		if errors.Is(err, document.ErrNotAllowed) {
 			pkg.JSONErrorResponseWriter(w, ErrNotAllowed, http.StatusForbidden)

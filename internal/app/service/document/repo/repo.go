@@ -22,6 +22,7 @@ type DocumentsRepo interface {
 	GetDocuments(ctx context.Context, ownerId string) ([]Document, error)
 	GetDocumentById(ctx context.Context, documentId string) (Document, error)
 	DeleteDocument(ctx context.Context, documentId string) error
+	EditDocument(ctx context.Context, documentId string, title string) error
 }
 
 type Repo struct {
@@ -93,4 +94,9 @@ func (r *Repo) GetDocumentById(ctx context.Context, documentId string) (Document
 func (r *Repo) DeleteDocument(ctx context.Context, documentId string) error {
 	doc := gorethink.Table(r.documentsTable).Get(documentId)
 	return doc.Delete().Exec(r.session, gorethink.ExecOpts{Context: ctx, NoReply: true})
+}
+
+func (r *Repo) EditDocument(ctx context.Context, documentId string, title string) error {
+	doc := gorethink.Table(r.documentsTable).Get(documentId)
+	return doc.Update(Document{Title: title}).Exec(r.session, gorethink.ExecOpts{Context: ctx, NoReply: true})
 }

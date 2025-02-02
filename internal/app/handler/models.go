@@ -5,6 +5,10 @@ type CreateDocumentPayload struct {
 	InitialContent string `json:"initialContent,omitempty"`
 }
 
+type EditDocumentPayload struct {
+	Title string `json:"title"`
+}
+
 type CreateDocumentResponse struct {
 	DocumentID string `json:"documentId"`
 }
