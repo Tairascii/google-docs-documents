@@ -3,6 +3,7 @@ package repo
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/dancannon/gorethink"
 	"log"
 )
@@ -14,12 +15,13 @@ var (
 
 const (
 	ownerIdField    = "owner_id"
+	titleField      = "title"
 	documentIdField = "document_id"
 )
 
 type DocumentsRepo interface {
 	CreateDocument(ctx context.Context, title, initialContent, ownerId string) (string, error)
-	GetDocuments(ctx context.Context, ownerId string) ([]Document, error)
+	GetDocuments(ctx context.Context, ownerId, search string) ([]Document, error)
 	GetDocumentById(ctx context.Context, documentId string) (Document, error)
 	DeleteDocument(ctx context.Context, documentId string) error
 	EditDocument(ctx context.Context, documentId string, title string) error
@@ -60,9 +62,10 @@ func (r *Repo) CreateDocument(ctx context.Context, title, initialContent, ownerI
 	return res.GeneratedKeys[0], nil
 }
 
-func (r *Repo) GetDocuments(ctx context.Context, ownerId string) ([]Document, error) {
+func (r *Repo) GetDocuments(ctx context.Context, ownerId, search string) ([]Document, error) {
 	filterByOwner := gorethink.Row.Field(ownerIdField).Eq(ownerId)
-	cursor, err := gorethink.Table(r.documentsTable).Filter(filterByOwner).Run(r.session, gorethink.RunOpts{Context: ctx})
+	filterByName := gorethink.Row.Field(titleField).Match(fmt.Sprintf("(?i)%s", search))
+	cursor, err := gorethink.Table(r.documentsTable).Filter(filterByOwner).Filter(filterByName).Run(r.session, gorethink.RunOpts{Context: ctx})
 	if err != nil {
 		log.Fatalf("Error querying table: %v", err)
 	}

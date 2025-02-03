@@ -14,7 +14,7 @@ var (
 
 type DocumentsService interface {
 	CreateDocument(ctx context.Context, title, initialContent string) (string, error)
-	GetDocuments(ctx context.Context) ([]Document, error)
+	GetDocuments(ctx context.Context, search string) ([]Document, error)
 	GetDocumentById(ctx context.Context, id string) (Document, error)
 	DeleteDocument(ctx context.Context, id string) error
 	EditDocument(ctx context.Context, id string, title string) error
@@ -35,12 +35,12 @@ func (s *Service) CreateDocument(ctx context.Context, title, initialContent stri
 	return s.repo.CreateDocument(ctx, title, initialContent, ownerId)
 }
 
-func (s *Service) GetDocuments(ctx context.Context) ([]Document, error) {
+func (s *Service) GetDocuments(ctx context.Context, search string) ([]Document, error) {
 	ownerId, ok := ctx.Value("id").(string)
 	if !ok {
 		return nil, ErrInvalidOwnerId
 	}
-	raw, err := s.repo.GetDocuments(ctx, ownerId)
+	raw, err := s.repo.GetDocuments(ctx, ownerId, search)
 	if err != nil {
 		return nil, err
 	}

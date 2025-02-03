@@ -79,8 +79,9 @@ func handlers(h *Handler) http.Handler {
 }
 
 func (h *Handler) GetDocuments(w http.ResponseWriter, r *http.Request) {
+	search := r.URL.Query().Get("search")
 	ctx := r.Context()
-	res, err := h.DI.UseCase.Documents.GetDocuments(ctx)
+	res, err := h.DI.UseCase.Documents.GetDocuments(ctx, search)
 	if err != nil {
 		pkg.JSONErrorResponseWriter(w, err, http.StatusInternalServerError)
 		return

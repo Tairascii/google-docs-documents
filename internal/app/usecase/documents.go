@@ -7,7 +7,7 @@ import (
 
 type DocumentsUseCase interface {
 	CreateDocument(ctx context.Context, title, initialContent string) (string, error)
-	GetDocuments(ctx context.Context) ([]document.Document, error)
+	GetDocuments(ctx context.Context, search string) ([]document.Document, error)
 	DeleteDocument(ctx context.Context, id string) error
 	EditDocument(ctx context.Context, id, title string) error
 }
@@ -29,8 +29,8 @@ func (u *UseCase) CreateDocument(ctx context.Context, title, initialContent stri
 	return u.documentsService.CreateDocument(ctx, title, initialContent)
 }
 
-func (u *UseCase) GetDocuments(ctx context.Context) ([]document.Document, error) {
-	return u.documentsService.GetDocuments(ctx)
+func (u *UseCase) GetDocuments(ctx context.Context, search string) ([]document.Document, error) {
+	return u.documentsService.GetDocuments(ctx, search)
 }
 
 func (u *UseCase) DeleteDocument(ctx context.Context, id string) error {
