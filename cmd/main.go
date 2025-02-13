@@ -28,6 +28,8 @@ func main() {
 		Session:        session,
 		DocumentsTable: "documents",
 	})
+
+	go documentRepo.WatchTableChange()
 	documentService := document.New(documentRepo)
 	documents := usecase.NewDocumentsUseCase(documentService)
 

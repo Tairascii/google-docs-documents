@@ -18,6 +18,7 @@ type DocumentsService interface {
 	GetDocumentById(ctx context.Context, id string) (Document, error)
 	DeleteDocument(ctx context.Context, id string) error
 	EditDocument(ctx context.Context, id string, title string) error
+	SaveDocumentContent(ctx context.Context, id string, content []byte) error
 }
 type Service struct {
 	repo repo.DocumentsRepo
@@ -69,4 +70,8 @@ func (s *Service) DeleteDocument(ctx context.Context, id string) error {
 
 func (s *Service) EditDocument(ctx context.Context, id string, title string) error {
 	return s.repo.EditDocument(ctx, id, title)
+}
+
+func (s *Service) SaveDocumentContent(ctx context.Context, id string, content []byte) error {
+	return s.repo.SaveDocumentContent(ctx, id, content)
 }

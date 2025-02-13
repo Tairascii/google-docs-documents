@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/Tairascii/google-docs-documents/internal/app"
 	"github.com/Tairascii/google-docs-documents/internal/app/service/document"
 	"github.com/Tairascii/google-docs-documents/pkg"
+	"github.com/dancannon/gorethink"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/gorilla/websocket"
@@ -60,7 +62,7 @@ func (h *Handler) InitHandlers() *chi.Mux {
 	r.Route("/api", func(api chi.Router) {
 		api.Route("/v1", func(v1 chi.Router) {
 			v1.Mount("/documents", handlers(h))
-			v1.HandleFunc("/document/ws", h.ConnectWS)
+			v1.HandleFunc("/document/ws/{id}", h.ConnectWS)
 		})
 	})
 	return r
@@ -164,6 +166,12 @@ func (h *Handler) EditDocument(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ConnectWS(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		pkg.JSONErrorResponseWriter(w, ErrInvalidRequest, http.StatusBadRequest)
+		return
+	}
+
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		pkg.JSONErrorResponseWriter(w, err, http.StatusInternalServerError)
@@ -182,6 +190,23 @@ func (h *Handler) ConnectWS(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println("connected to client")
 
+	cursor, err := gorethink.Table("documents").Changes().Run(r.session)
+	if err != nil {
+		log.Println("Error watching changes:", err)
+		return
+	}
+	defer cursor.Close()
+
+	var change map[string]interface{}
+	for cursor.Next(&change) {
+		fmt.Println("Document updated:", change)
+
+		newValue := change["new_val"].(map[string]interface{})
+		docID := newValue["id"].(string)
+		content, _ := json.Marshal(newValue["content"])
+
+		fmt.Printf("new data: %v %v \n", docID, string(content))
+	}
 	for {
 		messageType, msg, err := conn.ReadMessage()
 		if err != nil {
@@ -190,6 +215,10 @@ func (h *Handler) ConnectWS(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Printf("Received: %s\n", msg)
 
+		if err := h.DI.UseCase.Documents.SaveDocumentContent(context.TODO(), id, msg); err != nil {
+			log.Printf("Save Error: %s\n", err)
+			break
+		}
 		if err := conn.WriteMessage(messageType, msg); err != nil {
 			log.Println("Write Error:", err)
 			break

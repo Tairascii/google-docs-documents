@@ -7,4 +7,5 @@ type Document struct {
 	InitialContent string
 	RoomId         string
 	OrgId          string
+	Content        []byte
 }

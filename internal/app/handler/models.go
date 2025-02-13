@@ -20,4 +20,9 @@ type Document struct {
 	InitialContent string `json:"initialContent"`
 	RoomId         string `json:"roomId"`
 	OrgId          string `json:"orgId"`
+	Content        []byte `json:"content"`
+}
+
+type DocumentWSMessage struct {
+	Content []byte `json:"content"`
 }

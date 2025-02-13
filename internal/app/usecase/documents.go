@@ -10,6 +10,7 @@ type DocumentsUseCase interface {
 	GetDocuments(ctx context.Context, search string) ([]document.Document, error)
 	DeleteDocument(ctx context.Context, id string) error
 	EditDocument(ctx context.Context, id, title string) error
+	SaveDocumentContent(ctx context.Context, id string, content []byte) error
 }
 
 type UseCase struct {
@@ -51,4 +52,8 @@ func (u *UseCase) EditDocument(ctx context.Context, id, title string) error {
 	}
 
 	return u.documentsService.EditDocument(ctx, id, title)
+}
+
+func (u *UseCase) SaveDocumentContent(ctx context.Context, id string, content []byte) error {
+	return u.documentsService.SaveDocumentContent(ctx, id, content)
 }
