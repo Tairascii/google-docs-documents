@@ -33,9 +33,10 @@ type Handler struct {
 	upgrader websocket.Upgrader
 	clients  map[*websocket.Conn]bool
 	mu       *sync.Mutex
+	session  *gorethink.Session
 }
 
-func NewHandler(di *app.DI) *Handler {
+func NewHandler(di *app.DI, session *gorethink.Session) *Handler {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -49,6 +50,7 @@ func NewHandler(di *app.DI) *Handler {
 		upgrader: upgrader,
 		clients:  clients,
 		mu:       &sync.Mutex{},
+		session:  session,
 	}
 }
 
@@ -189,8 +191,24 @@ func (h *Handler) ConnectWS(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	fmt.Println("connected to client")
+	go h.WatchTableChange(conn)
+	for {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			log.Println("Read Error:", err)
+			break
+		}
+		log.Printf("Received: %s\n", msg)
 
-	cursor, err := gorethink.Table("documents").Changes().Run(r.session)
+		if err := h.DI.UseCase.Documents.SaveDocumentContent(context.TODO(), id, msg); err != nil {
+			log.Printf("Save Error: %s\n", err)
+			break
+		}
+	}
+}
+
+func (h *Handler) WatchTableChange(conn *websocket.Conn) {
+	cursor, err := gorethink.Table("documents").Changes().Run(h.session)
 	if err != nil {
 		log.Println("Error watching changes:", err)
 		return
@@ -203,25 +221,17 @@ func (h *Handler) ConnectWS(w http.ResponseWriter, r *http.Request) {
 
 		newValue := change["new_val"].(map[string]interface{})
 		docID := newValue["id"].(string)
-		content, _ := json.Marshal(newValue["content"])
-
-		fmt.Printf("new data: %v %v \n", docID, string(content))
-	}
-	for {
-		messageType, msg, err := conn.ReadMessage()
-		if err != nil {
-			log.Println("Read Error:", err)
+		content, ok := newValue["content"].([]byte)
+		if !ok {
+			log.Println("Error converting content to bytes:", newValue["content"])
 			break
 		}
-		log.Printf("Received: %s\n", msg)
-
-		if err := h.DI.UseCase.Documents.SaveDocumentContent(context.TODO(), id, msg); err != nil {
-			log.Printf("Save Error: %s\n", err)
-			break
-		}
-		if err := conn.WriteMessage(messageType, msg); err != nil {
+		if err := conn.WriteMessage(websocket.BinaryMessage, content); err != nil {
 			log.Println("Write Error:", err)
 			break
 		}
+		fmt.Println("content send")
+		fmt.Printf("new data: %v %v \n", docID, string(content))
 	}
+	return
 }

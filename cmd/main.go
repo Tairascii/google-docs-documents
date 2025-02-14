@@ -38,7 +38,7 @@ func main() {
 	}
 
 	di := &app.DI{UseCase: useCases}
-	handlers := handler.NewHandler(di)
+	handlers := handler.NewHandler(di, session)
 
 	srv := &http.Server{
 		Addr:         ":8000", // TODO add .env
