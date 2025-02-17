@@ -1,0 +1,10 @@
+repo:
+  host: localhost
+  port: 28015
+  documents_table: documents
+server:
+  port: 8080
+  timeout:
+    read: 5s
+    write: 5s
+    idle: 30s

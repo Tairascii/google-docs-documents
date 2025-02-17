@@ -2,23 +2,29 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/Tairascii/google-docs-documents/internal/app"
 	"github.com/Tairascii/google-docs-documents/internal/app/handler"
 	"github.com/Tairascii/google-docs-documents/internal/app/service/document"
 	docRepo "github.com/Tairascii/google-docs-documents/internal/app/service/document/repo"
 	"github.com/Tairascii/google-docs-documents/internal/app/usecase"
 	"github.com/dancannon/gorethink"
-	"log"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 )
 
 func main() {
+	cfg, err := app.LoadConfigs()
+	if err != nil {
+		panic(err)
+	}
+
 	session, err := gorethink.Connect(gorethink.ConnectOpts{
-		Address: "localhost:28015", // TODO change to .env
+		Address: fmt.Sprintf("%s:%s", cfg.Repo.Port, cfg.Repo.Port),
 	})
 	if err != nil {
 		log.Fatal("Something went wrong connecting to rethink")
@@ -26,7 +32,7 @@ func main() {
 
 	documentRepo := docRepo.NewRepo(docRepo.Params{
 		Session:        session,
-		DocumentsTable: "documents",
+		DocumentsTable: cfg.Repo.DocumentsTable,
 	})
 
 	go documentRepo.WatchTableChange()
@@ -41,10 +47,10 @@ func main() {
 	handlers := handler.NewHandler(di, session)
 
 	srv := &http.Server{
-		Addr:         ":8000", // TODO add .env
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  15 * time.Second,
+		Addr:         fmt.Sprintf(":%s", cfg.Server.Port),
+		ReadTimeout:  cfg.Server.Timeout.Read,
+		WriteTimeout: cfg.Server.Timeout.Write,
+		IdleTimeout:  cfg.Server.Timeout.Idle,
 		Handler:      handlers.InitHandlers(),
 	}
 
@@ -54,7 +60,7 @@ func main() {
 		}
 	}()
 
-	log.Println("Listening on port 8080")
+	log.Printf("Listening on port %s\n", cfg.Server.Port)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT, os.Interrupt)
