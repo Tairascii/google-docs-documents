@@ -2,7 +2,6 @@ package repo
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/dancannon/gorethink"
@@ -27,7 +26,6 @@ type DocumentsRepo interface {
 	DeleteDocument(ctx context.Context, documentId string) error
 	EditDocument(ctx context.Context, documentId string, title string) error
 	SaveDocumentContent(ctx context.Context, documentId string, content []byte) error
-	WatchTableChange()
 }
 
 type Repo struct {
@@ -111,24 +109,4 @@ func (r *Repo) SaveDocumentContent(ctx context.Context, documentId string, conte
 	doc := gorethink.Table(r.documentsTable)
 	_, err := doc.Insert(Document{Id: documentId, Content: content}, gorethink.InsertOpts{Conflict: "replace"}).RunWrite(r.session)
 	return err
-}
-
-func (r *Repo) WatchTableChange() {
-	cursor, err := gorethink.Table(r.documentsTable).Changes().Run(r.session)
-	if err != nil {
-		log.Println("Error watching changes:", err)
-		return
-	}
-	defer cursor.Close()
-
-	var change map[string]interface{}
-	for cursor.Next(&change) {
-		fmt.Println("Document updated:", change)
-
-		newValue := change["new_val"].(map[string]interface{})
-		docID := newValue["id"].(string)
-		content, _ := json.Marshal(newValue["content"])
-
-		fmt.Printf("new data: %v %v \n", docID, string(content))
-	}
 }

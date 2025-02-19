@@ -37,7 +37,7 @@ type Config struct {
 }
 
 func LoadConfigs() (*Config, error) {
-	f, err := os.Open(configFilePath)
+	f, err := os.Open(os.Getenv(configFilePath))
 	if err != nil {
 		return nil, err
 	}

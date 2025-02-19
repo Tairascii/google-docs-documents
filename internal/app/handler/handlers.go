@@ -168,9 +168,16 @@ func (h *Handler) EditDocument(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ConnectWS(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		pkg.JSONErrorResponseWriter(w, ErrInvalidRequest, http.StatusBadRequest)
+		return
+	}
+
+	err := h.DI.UseCase.Documents.CheckPermission(ctx, id)
+	if err != nil {
+		pkg.JSONErrorResponseWriter(w, err, http.StatusForbidden)
 		return
 	}
 
@@ -190,8 +197,7 @@ func (h *Handler) ConnectWS(w http.ResponseWriter, r *http.Request) {
 		h.mu.Unlock()
 	}()
 
-	fmt.Println("connected to client")
-	go h.WatchTableChange(conn)
+	go h.WatchTableChange(conn, id)
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
@@ -207,8 +213,9 @@ func (h *Handler) ConnectWS(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) WatchTableChange(conn *websocket.Conn) {
-	cursor, err := gorethink.Table("documents").Changes().Run(h.session)
+// TODO think of more clear way
+func (h *Handler) WatchTableChange(conn *websocket.Conn, id string) {
+	cursor, err := gorethink.Table("documents").Get(id).Changes().Run(h.session)
 	if err != nil {
 		log.Println("Error watching changes:", err)
 		return

@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/Tairascii/google-docs-documents/pkg"
 	"log"
 	"net/http"
 	"os"
@@ -18,16 +20,17 @@ import (
 )
 
 func main() {
+	logger := pkg.NewLogger()
 	cfg, err := app.LoadConfigs()
 	if err != nil {
-		panic(err)
+		log.Fatalf("[ERROR] load config: %s", err)
 	}
 
 	session, err := gorethink.Connect(gorethink.ConnectOpts{
-		Address: fmt.Sprintf("%s:%s", cfg.Repo.Port, cfg.Repo.Port),
+		Address: fmt.Sprintf("%s:%s", cfg.Repo.Host, cfg.Repo.Port),
 	})
 	if err != nil {
-		log.Fatal("Something went wrong connecting to rethink")
+		log.Fatalf("[ERROR] connect to rethink %s", err)
 	}
 
 	documentRepo := docRepo.NewRepo(docRepo.Params{
@@ -35,7 +38,6 @@ func main() {
 		DocumentsTable: cfg.Repo.DocumentsTable,
 	})
 
-	go documentRepo.WatchTableChange()
 	documentService := document.New(documentRepo)
 	documents := usecase.NewDocumentsUseCase(documentService)
 
@@ -55,20 +57,20 @@ func main() {
 	}
 
 	go func() {
-		if err := srv.ListenAndServe(); err != nil {
-			log.Fatalf("Something went wrong while runing server %s", err.Error())
+		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("[ERROR] listen %s", err)
 		}
 	}()
 
-	log.Printf("Listening on port %s\n", cfg.Server.Port)
+	logger.Info("listening on port %s", cfg.Server.Port)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT, os.Interrupt)
 	<-quit
 
-	log.Println("Shutting down server")
+	logger.Info("shutting down server...")
 
 	if err := srv.Shutdown(context.Background()); err != nil {
-		log.Fatalf("Something went wrong while shutting down server %s", err.Error())
+		log.Fatalf("[ERROR] shutdown %s", err)
 	}
 }

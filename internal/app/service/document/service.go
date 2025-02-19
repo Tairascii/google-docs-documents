@@ -19,6 +19,7 @@ type DocumentsService interface {
 	DeleteDocument(ctx context.Context, id string) error
 	EditDocument(ctx context.Context, id string, title string) error
 	SaveDocumentContent(ctx context.Context, id string, content []byte) error
+	CheckPermission(ctx context.Context, id string) error
 }
 type Service struct {
 	repo repo.DocumentsRepo
@@ -74,4 +75,19 @@ func (s *Service) EditDocument(ctx context.Context, id string, title string) err
 
 func (s *Service) SaveDocumentContent(ctx context.Context, id string, content []byte) error {
 	return s.repo.SaveDocumentContent(ctx, id, content)
+}
+
+func (s *Service) CheckPermission(ctx context.Context, id string) error {
+	userID, ok := ctx.Value("id").(string)
+	if !ok {
+		return ErrInvalidOwnerId
+	}
+	doc, err := s.repo.GetDocumentById(ctx, id)
+	if err != nil {
+		return err
+	}
+	if doc.OwnerId != userID {
+		return ErrNotAllowed
+	}
+	return nil
 }

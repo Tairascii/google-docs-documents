@@ -5,12 +5,17 @@ import (
 	"github.com/Tairascii/google-docs-documents/internal/app/service/document"
 )
 
+const (
+	defaultTitle = "Untitled document"
+)
+
 type DocumentsUseCase interface {
 	CreateDocument(ctx context.Context, title, initialContent string) (string, error)
 	GetDocuments(ctx context.Context, search string) ([]document.Document, error)
 	DeleteDocument(ctx context.Context, id string) error
 	EditDocument(ctx context.Context, id, title string) error
 	SaveDocumentContent(ctx context.Context, id string, content []byte) error
+	CheckPermission(ctx context.Context, docID string) error
 }
 
 type UseCase struct {
@@ -25,7 +30,7 @@ func NewDocumentsUseCase(documentsService document.DocumentsService) DocumentsUs
 
 func (u *UseCase) CreateDocument(ctx context.Context, title, initialContent string) (string, error) {
 	if title == "" {
-		title = "Untitled document"
+		title = defaultTitle
 	}
 	return u.documentsService.CreateDocument(ctx, title, initialContent)
 }
@@ -56,4 +61,8 @@ func (u *UseCase) EditDocument(ctx context.Context, id, title string) error {
 
 func (u *UseCase) SaveDocumentContent(ctx context.Context, id string, content []byte) error {
 	return u.documentsService.SaveDocumentContent(ctx, id, content)
+}
+
+func (u *UseCase) CheckPermission(ctx context.Context, docID string) error {
+	return u.documentsService.CheckPermission(ctx, docID)
 }
