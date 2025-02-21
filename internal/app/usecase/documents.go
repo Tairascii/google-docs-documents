@@ -16,6 +16,7 @@ type DocumentsUseCase interface {
 	EditDocument(ctx context.Context, id, title string) error
 	SaveDocumentContent(ctx context.Context, id string, content []byte) error
 	CheckPermission(ctx context.Context, docID string) error
+	WatchDocument(ctx context.Context, documentId string, ch chan<- []byte) error
 }
 
 type UseCase struct {
@@ -65,4 +66,8 @@ func (u *UseCase) SaveDocumentContent(ctx context.Context, id string, content []
 
 func (u *UseCase) CheckPermission(ctx context.Context, docID string) error {
 	return u.documentsService.CheckPermission(ctx, docID)
+}
+
+func (u *UseCase) WatchDocument(ctx context.Context, documentId string, ch chan<- []byte) error {
+	return u.documentsService.WatchDocument(ctx, documentId, ch)
 }

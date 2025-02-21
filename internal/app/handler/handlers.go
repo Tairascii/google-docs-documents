@@ -4,11 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/Tairascii/google-docs-documents/internal/app"
 	"github.com/Tairascii/google-docs-documents/internal/app/service/document"
 	"github.com/Tairascii/google-docs-documents/pkg"
-	"github.com/dancannon/gorethink"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/gorilla/websocket"
@@ -33,10 +31,9 @@ type Handler struct {
 	upgrader websocket.Upgrader
 	clients  map[*websocket.Conn]bool
 	mu       *sync.Mutex
-	session  *gorethink.Session
 }
 
-func NewHandler(di *app.DI, session *gorethink.Session) *Handler {
+func NewHandler(di *app.DI) *Handler {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -50,7 +47,6 @@ func NewHandler(di *app.DI, session *gorethink.Session) *Handler {
 		upgrader: upgrader,
 		clients:  clients,
 		mu:       &sync.Mutex{},
-		session:  session,
 	}
 }
 
@@ -188,6 +184,14 @@ func (h *Handler) ConnectWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
+	go func() {
+		err = h.WatchTableChange(ctx, conn, id)
+		if err != nil {
+			pkg.JSONErrorResponseWriter(w, err, http.StatusInternalServerError)
+			return
+		}
+	}()
+
 	h.mu.Lock()
 	h.clients[conn] = true
 	h.mu.Unlock()
@@ -197,7 +201,6 @@ func (h *Handler) ConnectWS(w http.ResponseWriter, r *http.Request) {
 		h.mu.Unlock()
 	}()
 
-	go h.WatchTableChange(conn, id)
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
@@ -206,39 +209,23 @@ func (h *Handler) ConnectWS(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Printf("Received: %s\n", msg)
 
-		if err := h.DI.UseCase.Documents.SaveDocumentContent(context.TODO(), id, msg); err != nil {
+		if err := h.DI.UseCase.Documents.SaveDocumentContent(ctx, id, msg); err != nil {
 			log.Printf("Save Error: %s\n", err)
 			break
 		}
 	}
 }
 
-// TODO think of more clear way
-func (h *Handler) WatchTableChange(conn *websocket.Conn, id string) {
-	cursor, err := gorethink.Table("documents").Get(id).Changes().Run(h.session)
-	if err != nil {
-		log.Println("Error watching changes:", err)
-		return
-	}
-	defer cursor.Close()
+func (h *Handler) WatchTableChange(ctx context.Context, conn *websocket.Conn, id string) (err error) {
+	contentCh := make(chan []byte)
+	go func() {
+		err = h.DI.UseCase.Documents.WatchDocument(ctx, id, contentCh)
+	}()
 
-	var change map[string]interface{}
-	for cursor.Next(&change) {
-		fmt.Println("Document updated:", change)
-
-		newValue := change["new_val"].(map[string]interface{})
-		docID := newValue["id"].(string)
-		content, ok := newValue["content"].([]byte)
-		if !ok {
-			log.Println("Error converting content to bytes:", newValue["content"])
+	for content := range contentCh {
+		if err = conn.WriteMessage(websocket.BinaryMessage, content); err != nil {
 			break
 		}
-		if err := conn.WriteMessage(websocket.BinaryMessage, content); err != nil {
-			log.Println("Write Error:", err)
-			break
-		}
-		fmt.Println("content send")
-		fmt.Printf("new data: %v %v \n", docID, string(content))
 	}
-	return
+	return err
 }

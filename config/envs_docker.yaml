@@ -3,7 +3,7 @@ repo:
   port: 28015
   documents_table: documents
 server:
-  port: 8080
+  port: 8000
   timeout:
     read: 5s
     write: 5s

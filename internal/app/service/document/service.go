@@ -20,6 +20,7 @@ type DocumentsService interface {
 	EditDocument(ctx context.Context, id string, title string) error
 	SaveDocumentContent(ctx context.Context, id string, content []byte) error
 	CheckPermission(ctx context.Context, id string) error
+	WatchDocument(ctx context.Context, documentId string, ch chan<- []byte) error
 }
 type Service struct {
 	repo repo.DocumentsRepo
@@ -90,4 +91,8 @@ func (s *Service) CheckPermission(ctx context.Context, id string) error {
 		return ErrNotAllowed
 	}
 	return nil
+}
+
+func (s *Service) WatchDocument(ctx context.Context, documentId string, ch chan<- []byte) error {
+	return s.repo.WatchDocument(ctx, documentId, ch)
 }

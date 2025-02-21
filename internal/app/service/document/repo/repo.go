@@ -11,6 +11,7 @@ import (
 var (
 	ErrCreateDocument = errors.New("error creating document")
 	ErrNoData         = errors.New("no data")
+	ErrWatchDocument  = errors.New("error watching document")
 )
 
 const (
@@ -26,6 +27,7 @@ type DocumentsRepo interface {
 	DeleteDocument(ctx context.Context, documentId string) error
 	EditDocument(ctx context.Context, documentId string, title string) error
 	SaveDocumentContent(ctx context.Context, documentId string, content []byte) error
+	WatchDocument(ctx context.Context, documentId string, ch chan<- []byte) error
 }
 
 type Repo struct {
@@ -109,4 +111,28 @@ func (r *Repo) SaveDocumentContent(ctx context.Context, documentId string, conte
 	doc := gorethink.Table(r.documentsTable)
 	_, err := doc.Insert(Document{Id: documentId, Content: content}, gorethink.InsertOpts{Conflict: "replace"}).RunWrite(r.session)
 	return err
+}
+
+func (r *Repo) WatchDocument(ctx context.Context, documentId string, ch chan<- []byte) error {
+	fmt.Println("start watch document")
+	defer func() {
+		fmt.Println("closing channel")
+		close(ch)
+	}()
+	cursor, err := gorethink.Table("documents").Get(documentId).Changes().Run(r.session, gorethink.RunOpts{Context: ctx})
+	if err != nil {
+		return errors.Join(ErrWatchDocument, err)
+	}
+	defer cursor.Close()
+
+	var change map[string]interface{}
+	for cursor.Next(&change) {
+		newValue := change["new_val"].(map[string]interface{})
+		content, ok := newValue["content"].([]byte)
+		if !ok {
+			return ErrWatchDocument
+		}
+		ch <- content
+	}
+	return nil
 }

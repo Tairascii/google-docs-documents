@@ -46,7 +46,7 @@ func main() {
 	}
 
 	di := &app.DI{UseCase: useCases}
-	handlers := handler.NewHandler(di, session)
+	handlers := handler.NewHandler(di)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.Server.Port),
@@ -62,7 +62,7 @@ func main() {
 		}
 	}()
 
-	logger.Info("listening on port %s", cfg.Server.Port)
+	logger.Info("listening on port", cfg.Server.Port)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT, os.Interrupt)
